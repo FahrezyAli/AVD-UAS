@@ -1,0 +1,362 @@
+---
+title: "Early Stage Diabetes Model"
+author: "Md Mushfiqur Rahman"
+date: "9/6/2021"
+output: html_document
+---
+
+# Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+library(caret)
+library(kernlab)
+library(e1071)
+library(ROCR)
+library(pROC)
+library(xgboost)
+library(shapr)
+library(Matrix)
+library(SHAPforxgboost)
+library(ggplot2)
+```
+
+# Loading data
+```{r data loading}
+load("ALL Model with Cluster.RData")
+```
+
+# Data Splitting (70% & 30%)
+```{r data splitting}
+data_k2 <- data.frame(cbind(data_clust, k_clust$cluster))
+names(data_k2)[15] <- "Cluster"
+data_k10 <- data.frame(cbind(data_clust, k_clust_10$cluster))
+names(data_k10)[15] <- "Cluster"
+
+data_k2$Cluster <- as.factor(data_k2$Cluster)
+data_k10$Cluster <- as.factor(data_k10$Cluster)
+
+ind_train = createDataPartition(data_k2$Cluster, p = 0.7, list = FALSE)
+train <- data_k2[ind_train,]
+test <- data_k2[-ind_train,]
+train_1 <- data_k10[ind_train, ]
+test_1 <- data_k10[-ind_train, ]
+```
+
+# Confusion matrix function using ggplot
+```{r confusion matrix, message=FALSE, warning=FALSE}
+plot_confusion_matrix <- function(cm, title = "Confusion Matrix") {
+  cm_table <- as.data.frame(cm$table)
+  colnames(cm_table) <- c("Prediction", "Reference", "Freq")
+  
+  ggplot(cm_table, aes(x = Reference, y = Prediction, fill = Freq)) +
+    geom_tile(color = "white") +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    geom_text(aes(label = Freq), color = "black", size = 4) +
+    theme_minimal() +
+    labs(title = title, fill = "Frequency") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+```
+
+# Random forest
+```{r train rf}
+model_RF <- train(Cluster ~ ., data = train, importance = TRUE, method = 'rf')
+```
+```{r view rf, warning=FALSE, message=FALSE}
+predicted_RF_train <- predict(model_RF, train)
+train_cm_RF <- confusionMatrix(train$Cluster, predicted_RF_train)
+
+plot_confusion_matrix(train_cm_RF, title = "Random Forest - Training Confusion Matrix")
+
+predicted_RF_test <- predict(model_RF, test)
+test_cm_RF <- confusionMatrix(test$Cluster, predicted_RF_test)
+
+plot_confusion_matrix(test_cm_RF, title = "Random Forest - Testing Confusion Matrix")
+
+knitr::kable(data.frame(train_cm_RF$overall),caption = "Overall Accuracy Training dataset")
+
+knitr::kable(data.frame(test_cm_RF$overall), caption = "Overall Accuracy Testing dataset")
+
+knitr::kable(data.frame(train_cm_RF$byClass),caption = "Other Measures Training dataset")
+
+knitr::kable(data.frame(test_cm_RF$byClass), caption = "Other measures Testing dataset")
+```
+
+# Decision Tree
+```{r train dt}
+model_DT <- train(Cluster ~ ., data = train, method = 'rpart')
+```
+```{r view dt}
+predicted_DT_train <- predict(model_DT, train)
+train_cm_DT <- confusionMatrix(predicted_DT_train, train$Cluster)
+
+plot_confusion_matrix(train_cm_DT, title = "Decision Tree - Training Confusion Matrix")
+
+predicted_DT_test <- predict(model_DT, test)
+test_cm_DT <- confusionMatrix(predicted_DT_test, test$Cluster)
+
+plot_confusion_matrix(test_cm_DT, title = "Decision Tree - Testing Confusion Matrix")
+
+knitr::kable(data.frame(train_cm_DT$overall),caption = "Overall Accuracy Training dataset")
+
+knitr::kable(data.frame(test_cm_DT$overall), caption = "Overall Accuracy Testing dataset")
+
+knitr::kable(data.frame(train_cm_DT$byClass),caption = "Other Measures Training dataset")
+
+knitr::kable(data.frame(test_cm_DT$byClass), caption = "Other measures Testing dataset")
+```
+
+# Support Vector Machine
+```{r train svm}
+model_SVM <- train(Cluster ~ ., data = train, method = 'lssvmRadial')
+```
+```{r view svm}
+predicted_SVM_train <- predict(model_SVM, train)
+train_cm_SVM <- confusionMatrix(predicted_SVM_train, train$Cluster)
+
+plot_confusion_matrix(train_cm_SVM, title = "Support Vector Machine - Training Confusion Matrix")
+
+predicted_SVM_test <- predict(model_SVM, test)
+test_cm_SVM <- confusionMatrix(predicted_SVM_test, test$Cluster)
+
+plot_confusion_matrix(test_cm_SVM, title = "Support Vector Machine - Testing Confusion Matrix")
+
+knitr::kable(data.frame(train_cm_SVM$overall),caption = "Overall Accuracy training dataset")
+
+knitr::kable(data.frame(test_cm_SVM$overall), caption = "Overall Accuracy testing dataset")
+
+knitr::kable(data.frame(train_cm_SVM$byClass),caption = "Other Measures training dataset")
+
+knitr::kable(data.frame(test_cm_SVM$byClass), caption = "Other measures testing dataset")
+```
+
+# Multi-Layer Perceptron
+```{r train mlp}
+model_MLP <- train(Cluster ~ ., data = train, method = 'mlp')
+```
+```{r view mlp}
+predicted_MLP_train <- predict(model_MLP, train)
+train_cm_MLP <- confusionMatrix(predicted_MLP_train, train$Cluster)
+
+plot_confusion_matrix(train_cm_MLP, title = "Multi-layer Perceptron - Training Confusion Matrix")
+
+predicted_MLP_test <- predict(model_MLP, test)
+test_cm_MLP <- confusionMatrix(predicted_MLP_test, test$Cluster)
+
+plot_confusion_matrix(test_cm_MLP, title = "Multi-layer Perceptron - Testing Confusion Matrix")
+
+knitr::kable(data.frame(train_cm_MLP$overall),caption = "Overall Accuracy training dataset")
+
+knitr::kable(data.frame(test_cm_MLP$overall), caption = "Overall Accuracy testing dataset")
+
+knitr::kable(data.frame(train_cm_MLP$byClass),caption = "Other Measures training dataset")
+
+knitr::kable(data.frame(test_cm_MLP$byClass), caption = "Other measures testing dataset")
+```
+
+# K-Nearest Neighbours
+```{r train knn}
+model_KNN <- train(Cluster ~ ., data = train, method = "knn", preProcess = c("center", "scale"), tuneLength = 20)
+```
+```{r view knn}
+predicted_KNN_train <- predict(model_KNN, train)
+train_cm_KNN <- confusionMatrix(predicted_KNN_train, train$Cluster)
+
+plot_confusion_matrix(train_cm_KNN, title = "K-Nearest Neighbors - Training Confusion Matrix")
+
+predicted_KNN_test <- predict(model_KNN, test)
+test_cm_KNN <- confusionMatrix(predicted_KNN_test, test$Cluster)
+
+plot_confusion_matrix(test_cm_KNN, title = "K-Nearest Neighbors - Testing Confusion Matrix")
+
+knitr::kable(data.frame(train_cm_KNN$overall),caption = "Overall Accuracy training dataset")
+
+knitr::kable(data.frame(test_cm_KNN$overall), caption = "Overall Accuracy testing dataset")
+
+knitr::kable(data.frame(train_cm_KNN$byClass),caption = "Other Measures training dataset")
+
+knitr::kable(data.frame(test_cm_KNN$byClass), caption = "Other measures testing dataset")
+```
+
+# ROC for Test Data
+```{r roc test}
+##
+roc_RF_test <- as.numeric(predict(model_RF, test, type = 'raw'))
+roc_RF_test1 <- multiclass.roc(test$Cluster,roc_RF_test )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_RF_test <- roc_RF_test1[['rocs']]
+
+##
+roc_MLP_test <- as.numeric(predict(model_MLP, test, type = 'raw'))
+roc_MLP_test1 <- multiclass.roc(test$Cluster,roc_MLP_test )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_MLP_test <- roc_MLP_test1[['rocs']]
+
+##
+roc_DT_test <- as.numeric(predict(model_DT, test, type = 'raw'))
+roc_DT_test1 <- multiclass.roc(test$Cluster,roc_DT_test )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_DT_test <- roc_DT_test1[['rocs']]
+
+##
+roc_SVM_test <- as.numeric(predict(model_SVM, test, type = 'raw'))
+roc_SVM_test1 <- multiclass.roc(test$Cluster,roc_SVM_test )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_SVM_test <- roc_SVM_test1[['rocs']]
+##
+roc_KNN_test <- as.numeric(predict(model_KNN, test, type = 'raw'))
+roc_KNN_test1 <- multiclass.roc(test$Cluster,roc_KNN_test )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_KNN_test <- roc_KNN_test1[['rocs']]
+
+
+# AUC Test
+auc(roc_RF_test1)
+## Multi-class area under the curve: 1
+auc(roc_DT_test1)
+## Multi-class area under the curve: 0.9443
+auc(roc_SVM_test1)
+## Multi-class area under the curve: 0.9753
+auc(roc_MLP_test1)
+## Multi-class area under the curve: 0.9926
+auc(roc_KNN_test1)
+## Multi-class area under the curve: 0.9686
+par(mfrow=c(1,1))
+# ROC test
+plot.roc(rs_RF_test[[1]])
+plot.roc(rs_DT_test[[1]], add=TRUE,col= "red") #1
+plot.roc(rs_SVM_test[[1]], add=TRUE, col= "blue") 
+plot.roc(rs_MLP_test[[1]], add= TRUE, col="green") #1
+plot.roc(rs_KNN_test[[1]], add= TRUE, col="cyan4")#1
+legend(0.2,0.8 , legend=c("RF", "DT","SVM","MLP","KNN"),
+       col=c("Black", "cyan4","blue"), lty=c(1,1,1), cex=0.8,
+       title="Model", text.font=1)
+```
+
+# ROC for Train Data
+```{r}
+##
+roc_RF_train <- as.numeric(predict(model_RF, train, type = 'raw'))
+roc_RF_train1 <- multiclass.roc(train$Cluster,roc_RF_train )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_RF_train <- roc_RF_train1[['rocs']]
+
+##
+roc_MLP_train <- as.numeric(predict(model_MLP, train, type = 'raw'))
+roc_MLP_train1 <- multiclass.roc(train$Cluster,roc_MLP_train )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_MLP_train <- roc_MLP_train1[['rocs']]
+
+##
+roc_DT_train <- as.numeric(predict(model_DT, train, type = 'raw'))
+roc_DT_train1 <- multiclass.roc(train$Cluster,roc_DT_train )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_DT_train <- roc_DT_train1[['rocs']]
+
+##
+roc_SVM_train <- as.numeric(predict(model_SVM, train, type = 'raw'))
+roc_SVM_train1 <- multiclass.roc(train$Cluster,roc_SVM_train )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_SVM_train <- roc_SVM_train1[['rocs']]
+##
+roc_KNN_train <- as.numeric(predict(model_KNN, train, type = 'raw'))
+roc_KNN_train1 <- multiclass.roc(train$Cluster,roc_KNN_train )
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+## Setting direction: controls < cases
+rs_KNN_train <- roc_KNN_train1[['rocs']]
+
+
+# AUC train
+auc(roc_RF_train1)
+## Multi-class area under the curve: 1
+auc(roc_DT_train1)
+## Multi-class area under the curve: 0.945
+auc(roc_SVM_train1)
+## Multi-class area under the curve: 0.9813
+auc(roc_MLP_train1)
+## Multi-class area under the curve: 1
+auc(roc_KNN_train1)
+## Multi-class area under the curve: 0.9688
+par(mfrow=c(1,1))
+# ROC train
+plot.roc(rs_RF_train[[1]])
+plot.roc(rs_DT_train[[1]], add=TRUE,col= "red") #1
+plot.roc(rs_SVM_train[[1]], add=TRUE, col= "blue") 
+plot.roc(rs_MLP_train[[1]], add= TRUE, col="green") #1
+plot.roc(rs_KNN_train[[1]], add= TRUE, col="cyan4")#1
+legend(0.2,0.8 , legend=c("RF", "DT","SVM","MLP","KNN"),
+       col=c("Black", "cyan4","blue"), lty=c(1,1,1), cex=0.8,
+       title="Model", text.font=1)
+
+```
+
+# XGBoost Feature Importance
+```{r xgboost, warning=FALSE, message=FALSE}
+sparse_matrix <- sparse.model.matrix(Cluster ~ .-1, data = data_k2)
+output_vector = data_k2$Cluster
+xg_df<- xgb.DMatrix(data = sparse_matrix, label = output_vector )
+
+df_x <- as.matrix(data_k2[,-15])
+df_y <- as.matrix(data_k2[ , 15])
+
+param_list <- list(objective = "reg:squarederror",
+                   eta = 0.02,
+                   max_depth = 10,
+                   gamma = 0.01,
+                   subsample = 0.95
+)
+xgb_model <- xgboost::xgboost(data = df_x, 
+                              label = df_y, 
+                              params = param_list, nrounds = 10,
+                              verbose = FALSE, nthread = parallel::detectCores() - 2,
+                              early_stopping_rounds = 8)
+
+# compute feature importance matrix
+importance_matrix = xgb.importance(feature_names = colnames(df_x),
+                                   model = xgb_model)
+knitr::kable(data.frame(importance_matrix), caption = "Variable Importance with XGboost")
+
+# XGBoost Importance plot
+xgb.plot.importance(importance_matrix = importance_matrix)
+
+# Shap
+shap_values <- shap.values(xgb_model, xg_df)
+xgb.ggplot.shap.summary(df_x, model = xgb_model)
+
+shap_values$mean_shap_score
+##         Polydipsia    delayed.healing    partial.paresis sudden.weight.loss 
+##       0.0938993023       0.0422095291       0.0319326819       0.0183039085 
+##           weakness            Itching     Genital.thrush             Gender 
+##       0.0106696619       0.0088489557       0.0037295621       0.0034789454 
+##                Age           Polyuria         Polyphagia           Alopecia 
+##       0.0030508709       0.0030007084       0.0018069677       0.0010354167 
+##            Obesity       Irritability    visual.blurring   muscle.stiffness 
+##       0.0002888584       0.0001867122       0.0001861276       0.0000000000
+# To prepare the long-format data:
+shap_long <- shap.prep(shap_contrib = shap_values$shap_score, X_train = df_x)
+# **SHAP summary plot**
+shap.plot.summary(shap_long)
+
+# Dependence Plot for top 6 features
+fig_list <- lapply(names(shap_values$mean_shap_score)[1:10], 
+                   shap.plot.dependence, data_long = shap_long)
+gridExtra::grid.arrange(grobs = fig_list, ncol = 5)
+```
